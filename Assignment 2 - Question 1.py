@@ -75,3 +75,30 @@ outputFile.close()
 #Open and read from text file "encrypted_text.txt".
 with open("encrypted_text.txt", 'r') as encyptedFile:
     encryptedInput = encyptedFile.read()
+
+#Decrypt text from file.
+decryptedText = "" 
+for char in encryptedInput:
+    if char in alphaLowerFirst:
+        newCharacter = ord(char) - key1
+        if newCharacter < ord('a'):
+            newCharacter = ord('z') - (ord('a') - newCharacter - 1)
+        decryptedText += chr(((newCharacter - ord('a')) % 26) + ord('a'))
+    elif char in alphaLowerSecond:
+        newCharacter = ord(char) + key2
+        if newCharacter > ord('z'):
+            newCharacter = ord('a') + (newCharacter - ord('z') - 1)
+        decryptedText += chr(((newCharacter - ord('a')) % 26) + ord('a'))
+    elif char in alphaUpperFirst:
+        newCharacter = ord(char) + key3
+        if newCharacter < ord('A'):
+            newCharacter = ord('Z') + (newCharacter - ord('Z') - 1)
+        decryptedText += chr(((newCharacter - ord('A')) % 26) + ord('A'))
+    elif char in alphaUpperSecond:
+        newCharacter = ord(char) - key4
+        if newCharacter < ord('A'):
+            newCharacter = ord('Z') - (ord('A') - newCharacter - 1)
+        decryptedText += chr(((newCharacter - ord('A')) % 26) + ord('A'))
+    else:
+        decryptedText += char
+
