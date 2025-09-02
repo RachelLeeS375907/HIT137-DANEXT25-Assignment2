@@ -1,6 +1,5 @@
 import os      # Operating system interface - used to check if folders/files exist
 import csv     # CSV file reader - parses comma-separated value files
-from datetime import datetime  # Date and time handling - for parsing dates and extracting months
 import math    # Mathematical functions - specifically need sqrt for standard deviation
 
 def load_all_csv_files(folder_path):
@@ -22,22 +21,28 @@ def load_all_csv_files(folder_path):
     # List comprehension filters to only keep files ending with '.csv'
     csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
     
-    # Check if we found any CSV files
+    # Check if any CSV Files found
     # Empty list evaluates to False in Python
     if not csv_files:
         print(f"No CSV files found in '{folder_path}'")
         return None
     
-    # Tell user how many files we're about to process
-    print(f"Found {len(csv_files)} CSV file(s) to process...")
-    
     # Loop through each CSV file we found
     for file in csv_files:
         # Build complete path by joining folder path and filename
-        # Example: "temperatures" + "2023.csv" = "temperatures/2023.csv"
+        # Example: "temperatures" + "stations_group_1986.csv" = "temperatures/stations_group_1986.csv"
         file_path = os.path.join(folder_path, file)
         
         try:
+            # Extract year from filename if possible (e.g., "stations_group_1986.csv" -> "1986")
+            # This helps us track which year the data is from
+            year = None
+            for part in file.split('_'):
+                for subpart in part.split('.'):
+                    if subpart.isdigit() and len(subpart) == 4:
+                        year = subpart
+                        break
+            
             # Open the CSV file in read mode
             # 'with' statement ensures file is properly closed after reading
             with open(file_path, 'r') as csvfile:
@@ -47,11 +52,10 @@ def load_all_csv_files(folder_path):
                 
                 # Read each row from the CSV file
                 for row in reader:
+                    # Add the year to this row if we found it
+                    row['year'] = year if year else 'unknown'
                     # Add this row (as a dictionary) to our main data list
                     all_data.append(row)
-            
-            # Report successful loading of this file
-            print(f"  Loaded: {file}")
             
         except Exception as e:
             # If anything goes wrong reading the file, catch the error
@@ -62,85 +66,13 @@ def load_all_csv_files(folder_path):
     # Ternary operator: return all_data if it has content, else None
     return all_data if all_data else None
 
-def find_column_name(data, possible_names):
-    """
-    Find which column name exists in the data from a list of possible names.
-    """
-    # Check if data is empty or None
-    if not data:
-        return None
-    
-    # Get column names from the first row (dictionary keys)
-    # data[0] is first row, .keys() gets all column names
-    columns = data[0].keys()
-    
-    # Try each possible name to see if it exists in the columns
-    for name in possible_names:
-        # If this name is found in the columns, return it
-        if name in columns:
-            return name
-    
-    # If none of the possible names were found, return None
-    return None
-
-def parse_date(date_string):
-    """
-    Try to parse a date string using common formats.
-    Returns a datetime object or None if parsing fails.
-    """
-    # List of common date formats to try
-    # %Y = 4-digit year, %m = month, %d = day
-    date_formats = [
-        '%Y-%m-%d',    # 2023-03-15
-        '%d/%m/%Y',    # 15/03/2023
-        '%m/%d/%Y',    # 03/15/2023
-        '%Y/%m/%d',    # 2023/03/15
-        '%d-%m-%Y',    # 15-03-2023
-        '%m-%d-%Y'     # 03-15-2023
-    ]
-    
-    # Try each format until one works
-    for fmt in date_formats:
-        try:
-            # strptime converts string to datetime using the format
-            # If successful, return the datetime object
-            return datetime.strptime(date_string, fmt)
-        except ValueError:
-            # If format doesn't match, try the next one
-            continue
-    
-    # If no format worked, return None
-    return None
-
-def get_season(month):
-    """
-    Determine the Australian season based on the month.
-    Summer: Dec-Feb (12, 1, 2)
-    Autumn: Mar-May (3, 4, 5)
-    Winter: Jun-Aug (6, 7, 8)
-    Spring: Sep-Nov (9, 10, 11)
-    """
-    # Check which list contains the month number
-    # Australian seasons are opposite to Northern Hemisphere
-    if month in [12, 1, 2]:     # December, January, February
-        return "Summer"
-    elif month in [3, 4, 5]:     # March, April, May
-        return "Autumn"
-    elif month in [6, 7, 8]:     # June, July, August
-        return "Winter"
-    elif month in [9, 10, 11]:   # September, October, November
-        return "Spring"
-    else:
-        # Invalid month number (should never happen)
-        return None
-
 def is_valid_number(value):
     """
     Check if a value can be converted to a float and is not NaN.
     """
     # Check for None, empty string, or the text "NAN"
     # .upper() converts to uppercase for case-insensitive comparison
-    if value is None or value == '' or value.upper() == 'NAN':
+    if value is None or value == '' or str(value).upper() == 'NAN':
         return False
     
     try:
@@ -191,34 +123,33 @@ def calculate_std_dev(values):
     # Step 3: Standard deviation is square root of variance
     return math.sqrt(variance)
 
-def calculate_seasonal_averages(data):
+def get_season(month_name):
     """
-    Calculate the average temperature for each season across all stations and years.
+    Determine the Australian season based on the month name.
+    Summer: Dec-Feb
+    Autumn: Mar-May
+    Winter: Jun-Aug
+    Spring: Sep-Nov
     """
-    print("\nCalculating seasonal averages...")
+    # Convert month name to lowercase for easier comparison
+    month = month_name.lower()
     
-    # Find which column contains dates
-    # Try common column names for dates
-    date_columns = ['Date', 'date', 'DATE']
-    date_col = find_column_name(data, date_columns)
-    
-    # If no date column found, we can't determine seasons
-    if not date_col:
-        print("Warning: No date column found. Cannot calculate seasonal averages.")
-        return {}  # Return empty dictionary
-    
-    # Find which column contains temperatures
-    # Try common column names for temperature
-    temp_columns = ['Temperature', 'temperature', 'TEMPERATURE', 'Temp', 'temp']
-    temp_col = find_column_name(data, temp_columns)
-    
-    # If no temperature column found, we can't calculate averages
-    if not temp_col:
-        print("Warning: No temperature column found.")
-        return {}
-    
-    # Create dictionary to store temperature lists for each season
-    # Each season starts with an empty list
+    # Check which season the month belongs to
+    # Australian seasons (Southern Hemisphere)
+    if month in ['december', 'january', 'february']:
+        return "Summer"
+    elif month in ['march', 'april', 'may']:
+        return "Autumn"
+    elif month in ['june', 'july', 'august']:
+        return "Winter"
+    elif month in ['september', 'october', 'november']:
+        return "Spring"
+    else:
+        # Not a valid month name
+        return None
+
+def calculate_seasonal_averages_monthly_format(data):
+    # Dictionary to store all temperatures for each season
     seasonal_temps = {
         'Summer': [],
         'Autumn': [],
@@ -226,104 +157,117 @@ def calculate_seasonal_averages(data):
         'Spring': []
     }
     
-    # Process each row of data
+    # List of month names we expect to find as columns
+    month_columns = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December']
+    
+    # Process each row (each station's data)
     for row in data:
-        # Try to parse the date string into a datetime object
-        date = parse_date(row[date_col])
-        
-        # Skip this row if date parsing failed
-        if not date:
-            continue
-        
-        # Get the season based on the month (1-12)
-        season = get_season(date.month)
-        
-        # Skip if month was invalid (shouldn't happen)
-        if not season:
-            continue
-        
-        # Check if temperature value is valid (not NaN or empty)
-        if is_valid_number(row[temp_col]):
-            # Convert string to float and add to appropriate season list
-            temp = float(row[temp_col])
-            seasonal_temps[season].append(temp)
+        # Check each month column
+        for month in month_columns:
+            # Check if this month column exists in the row
+            if month in row:
+                # Get the temperature value for this month
+                temp_value = row[month]
+                
+                # Check if it's a valid number (not NaN or empty)
+                if is_valid_number(temp_value):
+                    # Convert to float
+                    temp = float(temp_value)
+                    
+                    # Determine which season this month belongs to
+                    season = get_season(month)
+                    
+                    # Add temperature to the appropriate season's list
+                    if season:
+                        seasonal_temps[season].append(temp)
     
     # Calculate average for each season
     seasonal_avg = {}
     
     # Process each season's collected temperatures
     for season, temps in seasonal_temps.items():
-        # Only calculate average if we have temperatures for this season
+        # Only calculate average if have temperatures for this season
         if temps:
             # Calculate and store the mean temperature
-            seasonal_avg[season] = calculate_mean(temps)
-    
+            avg = calculate_mean(temps)
+            seasonal_avg[season] = avg
     return seasonal_avg
 
-def find_largest_temperature_range(data):
-    """
-    Find the station(s) with the largest temperature range.
-    """
-    print("\nFinding stations with largest temperature range...")
+def find_largest_temperature_range_monthly_format(data):
+    # Dictionary to store ALL temperatures for each station (across all years)
+    # This ensures we get the true min/max across all available data
+    station_all_temps = {}
     
-    # Find column names for station and temperature
-    # Try multiple possible column names
-    station_columns = ['Station', 'station', 'STATION', 'Station_Name', 'station_name']
-    temp_columns = ['Temperature', 'temperature', 'TEMPERATURE', 'Temp', 'temp']
+    # List of month columns to check for temperatures
+    month_columns = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December']
     
-    # Find actual column names in the data
-    station_col = find_column_name(data, station_columns)
-    temp_col = find_column_name(data, temp_columns)
-    
-    # Can't proceed without both columns
-    if not station_col or not temp_col:
-        print("Warning: Required columns not found.")
-        return []  # Return empty list
-    
-    # Dictionary to group temperatures by station
-    # Key: station name, Value: list of temperatures
-    station_temps = {}
-    
-    # Process each row to group temperatures by station
+    # Process each row (each station/year combination)
     for row in data:
-        # Get the station name from this row
-        station = row[station_col]
+        # Get station name - try different possible column names
+        station_name = None
         
-        # Check if temperature is valid (not NaN)
-        if is_valid_number(row[temp_col]):
-            # Convert temperature to float
-            temp = float(row[temp_col])
-            
-            # Create new list for this station if first time seeing it
-            if station not in station_temps:
-                station_temps[station] = []
-            
-            # Add temperature to this station's list
-            station_temps[station].append(temp)
+        # Try various possible column names for station
+        possible_station_cols = ['STATION_NAME', 'Station_Name', 'Station', 'station', 
+                                'STN_NAME', 'Name', 'name', 'STATION', 'StnName', 'stn_name']
+        
+        for col_name in possible_station_cols:
+            if col_name in row and row[col_name] and str(row[col_name]).strip():
+                station_name = str(row[col_name]).strip()  # Convert to string and remove whitespace
+                break
+        
+        # If still no station name, try any column with "station" or "name" in it
+        if not station_name:
+            for col_name in row.keys():
+                if ('station' in col_name.lower() or 'name' in col_name.lower()) and row[col_name]:
+                    station_name = str(row[col_name]).strip()
+                    break
+        
+        # If STILL no station name, use STN_ID if available
+        if not station_name and 'STN_ID' in row and row['STN_ID']:
+            station_name = f"Station_{row['STN_ID']}"
+        
+        # Skip if no station identifier found
+        if not station_name:
+            continue
+        
+        # Initialize list for new station if first time seeing it
+        if station_name not in station_all_temps:
+            station_all_temps[station_name] = []
+        
+        # Collect temperatures from all month columns
+        for month in month_columns:
+            if month in row:
+                # Get temperature value
+                temp_value = row[month]
+                
+                # Only add valid numbers (not NaN or empty)
+                if is_valid_number(temp_value):
+                    temp = float(temp_value)
+                    station_all_temps[station_name].append(temp)
     
-    # Dictionary to store range calculations for each station
+    # Now calculate the range for each station using ALL their temperatures
     station_ranges = {}
     
-    # Calculate temperature range for each station
-    for station, temps in station_temps.items():
-        # Only calculate if station has temperature data
-        if temps:
-            # Find highest and lowest temperatures
-            max_temp = max(temps)  # Built-in max function
-            min_temp = min(temps)  # Built-in min function
-            
-            # Calculate range (difference between max and min)
+    for station_name, all_temps in station_all_temps.items():
+        # Need at least 2 temperatures to calculate a meaningful range
+        if len(all_temps) >= 2:
+            # Find max and min across ALL temperatures for this station
+            max_temp = max(all_temps)
+            min_temp = min(all_temps)
             temp_range = max_temp - min_temp
             
-            # Store all three values for this station
-            station_ranges[station] = {
+            # Store the range information for this station
+            station_ranges[station_name] = {
                 'range': temp_range,
                 'max': max_temp,
                 'min': min_temp
             }
     
-    # Check if we have any stations with data
+    # Check if we have any stations with valid ranges
     if not station_ranges:
+        print("  No temperature ranges could be calculated.")
         return []
     
     # Find the largest range value
@@ -344,60 +288,68 @@ def find_largest_temperature_range(data):
                 'max': data['max'],
                 'min': data['min']
             })
-    
     return largest_range_stations
 
-def calculate_temperature_stability(data):
+def calculate_temperature_stability_monthly_format(data):
     """
     Find stations with most stable (smallest std dev) and most variable (largest std dev) temperatures.
+    Data has monthly columns for temperatures.
     """
-    print("\nCalculating temperature stability...")
+    # Dictionary to store all temperatures for each station across all years
+    station_all_temps = {}
     
-    # Find column names (same process as before)
-    station_columns = ['Station', 'station', 'STATION', 'Station_Name', 'station_name']
-    temp_columns = ['Temperature', 'temperature', 'TEMPERATURE', 'Temp', 'temp']
+    # List of month columns to check
+    month_columns = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December']
     
-    # Get actual column names from data
-    station_col = find_column_name(data, station_columns)
-    temp_col = find_column_name(data, temp_columns)
-    
-    # Check both columns exist
-    if not station_col or not temp_col:
-        print("Warning: Required columns not found.")
-        return [], []  # Return two empty lists
-    
-    # Group temperatures by station (same as before)
-    station_temps = {}
-    
-    # Collect all temperatures for each station
+    # Process each row to collect all temperatures by station
+    row_count = 0
     for row in data:
-        station = row[station_col]
+        row_count += 1
         
-        # Only process valid temperature values
-        if is_valid_number(row[temp_col]):
-            temp = float(row[temp_col])
-            
-            # Initialize list for new station
-            if station not in station_temps:
-                station_temps[station] = []
-            
-            # Add to station's temperature list
-            station_temps[station].append(temp)
-    
-    # Dictionary to store standard deviation for each station
-    station_stdev = {}
+        # Get station name - try different possible column names
+        station_name = None
+        
+        # Extended list of possible column names
+        possible_station_cols = ['STATION_NAME', 'Station_Name', 'Station', 'station', 
+                                'STN_NAME', 'Name', 'name', 'STATION']
+        
+        for col_name in possible_station_cols:
+            if col_name in row and row[col_name]:  # Check column exists and has value
+                station_name = str(row[col_name]).strip()  # Convert to string and remove whitespace
+                break
+        
+        # Skip if no station name found
+        if not station_name:
+            continue
+        
+        # Initialize list for new station
+        if station_name not in station_all_temps:
+            station_all_temps[station_name] = []
+        
+        # Collect temperatures from all months
+        for month in month_columns:
+            if month in row:
+                temp_value = row[month]
+                
+                # Only add valid numbers
+                if is_valid_number(temp_value):
+                    station_all_temps[station_name].append(float(temp_value))
     
     # Calculate standard deviation for each station
-    for station, temps in station_temps.items():
+    station_stdev = {}
+    
+    # Process each station's collected temperatures
+    for station, temps in station_all_temps.items():
         # Need at least 2 values to calculate standard deviation
         if len(temps) > 1:
-            # Calculate and store if successful
             std_dev = calculate_std_dev(temps)
             if std_dev is not None:
                 station_stdev[station] = std_dev
     
     # Check if we have any standard deviations calculated
     if not station_stdev:
+        print("  No stations with enough data for stability analysis.")
         return [], []
     
     # Find the smallest and largest standard deviations
@@ -417,16 +369,10 @@ def calculate_temperature_stability(data):
         # Check if this station has the maximum stdev (most variable)
         if abs(stdev - max_stdev) < 0.01:
             most_variable.append({'station': station, 'stdev': stdev})
-    
     # Return both lists
     return most_stable, most_variable
 
 def save_seasonal_averages(seasonal_avg, filename):
-    """
-    Save seasonal average temperatures to a text file.
-    """
-    print(f"\nSaving seasonal averages to {filename}...")
-    
     # Open file in write mode ('w' creates new file or overwrites existing)
     with open(filename, 'w') as f:
         # Write header
@@ -444,16 +390,16 @@ def save_seasonal_averages(seasonal_avg, filename):
             if season in seasonal_avg:
                 # Format: "Season: XX.X°C" with 1 decimal place
                 f.write(f"{season}: {seasonal_avg[season]:.1f}°C\n")
-    
-    # Confirm file was saved
-    print(f"  Saved to {filename}")
+        
+        # If no data at all, write a message
+        if not seasonal_avg:
+            f.write("No seasonal data available\n")
 
 def save_largest_range(stations, filename):
     """
     Save stations with largest temperature range to a text file.
     """
-    print(f"\nSaving largest temperature range to {filename}...")
-    
+
     # Open file for writing
     with open(filename, 'w') as f:
         # Write header
@@ -478,15 +424,11 @@ def save_largest_range(stations, filename):
         else:
             # No data case
             f.write("No data available\n")
-    
-    print(f"  Saved to {filename}")
 
 def save_stability_results(most_stable, most_variable, filename):
     """
     Save temperature stability results to a text file.
     """
-    print(f"\nSaving temperature stability to {filename}...")
-    
     # Open file for writing
     with open(filename, 'w') as f:
         # Write header
@@ -518,8 +460,7 @@ def save_stability_results(most_stable, most_variable, filename):
                 f.write(f"StdDev {station_data['stdev']:.1f}°C\n")
         else:
             f.write("No data available\n")
-    
-    print(f"  Saved to {filename}")
+
 
 def main():
     """
@@ -542,33 +483,32 @@ def main():
         return  # Exit the program
     
     # Print summary of loaded data
-    print(f"\nTotal records loaded: {len(data)}")
     
     # Show column names from first row (if data exists)
     if data:
-        print(f"Columns found: {list(data[0].keys())}")
-    
-    # Task 1: Calculate seasonal averages
-    # Call function and get dictionary of averages
-    seasonal_avg = calculate_seasonal_averages(data)
-    
-    # Save results if we got any averages
-    if seasonal_avg:
-        save_seasonal_averages(seasonal_avg, "average_temp.txt")
-    
-    # Task 2: Find largest temperature range
-    # Get list of stations with largest range
-    largest_range = find_largest_temperature_range(data)
-    
-    # Save results (even if empty list)
-    save_largest_range(largest_range, "largest_temp_range_station.txt")
-    
-    # Task 3: Calculate temperature stability
-    # Get two lists: most stable and most variable stations
-    most_stable, most_variable = calculate_temperature_stability(data)
-    
-    # Save both results to one file
-    save_stability_results(most_stable, most_variable, "temperature_stability_stations.txt")
+        columns = list(data[0].keys())
+        # Auto-detect format based on columns
+        # Check if we have month columns (January, February, etc.)
+        has_month_columns = any(month in columns for month in 
+                               ['January', 'February', 'March', 'April', 'May', 'June',
+                                'July', 'August', 'September', 'October', 'November', 'December'])
+        
+        if has_month_columns:   
+            # Task 1: Calculate seasonal averages for monthly format
+            seasonal_avg = calculate_seasonal_averages_monthly_format(data)
+            if seasonal_avg:
+                save_seasonal_averages(seasonal_avg, "average_temp.txt")
+            
+            # Task 2: Find largest temperature range for monthly format
+            largest_range = find_largest_temperature_range_monthly_format(data)
+            save_largest_range(largest_range, "largest_temp_range_station.txt")
+            
+            # Task 3: Calculate temperature stability for monthly format
+            most_stable, most_variable = calculate_temperature_stability_monthly_format(data)
+            save_stability_results(most_stable, most_variable, "temperature_stability_stations.txt")
+        else:
+            print("Error: Expected monthly columns not found in data.")
+            print("Please ensure your CSV files have columns for each month (January, February, etc.)")
     
     # Print completion message with file list
     print("\n" + "=" * 50)
@@ -577,8 +517,3 @@ def main():
     print("  - largest_temp_range_station.txt")
     print("  - temperature_stability_stations.txt")
     print("=" * 50)
-
-# Standard Python idiom: only run main() if script is run directly
-# (not imported as a module)
-if __name__ == "__main__":
-    main()
